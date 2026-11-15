@@ -1,0 +1,31 @@
+name: Build unsigned iOS app
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  ipa:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: apps/house-capture
+    steps:
+      - uses: actions/checkout@v4
+      # Newest Xcode on the image; project.yml asks for 27, listing helps if the build fails on version
+      - run: |
+          ls -d /Applications/Xcode*.app
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          xcodebuild -version
+      - run: brew install xcodegen && xcodegen generate
+      # Unsigned: the sideload tool re-signs with a personal Apple ID
+      - run: >
+          xcodebuild -project HouseCapture.xcodeproj -scheme HouseCapture
+          -configuration Release -destination 'generic/platform=iOS'
+          -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+      - run: |
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/*.app Payload/
+          zip -qr HouseCapture.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HouseCapture-ipa
+          path: apps/house-capture/HouseCapture.ipa
